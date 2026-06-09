@@ -8,10 +8,8 @@ if [ -z "$WALLET_ADDRESS" ]; then
   exit 1
 fi
 
-if [ ! -f "./junocashd" ]; then
-  echo "📥 Mencoba download semua versi sampai dapat binary..."
-
-  # Daftar versi dari terbaru ke lama
+download_binary() {
+  echo "📥 Mencari binary..."
   VERSIONS="v0.9.9 v0.9.8 v0.9.7"
 
   for VERSION in $VERSIONS; do
@@ -19,7 +17,6 @@ if [ ! -f "./junocashd" ]; then
     
     RELEASE_JSON=$(curl -s "https://api.github.com/repos/juno-cash/junocash/releases/tags/$VERSION")
     
-    # Cari linux tar.gz bukan dbg bukan SHA256
     DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
       | grep -o '"browser_download_url": *"[^"]*"' \
       | grep -o 'https://[^"]*' \
@@ -30,7 +27,7 @@ if [ ! -f "./junocashd" ]; then
       | head -1)
 
     if [ -z "$DOWNLOAD_URL" ]; then
-      echo "⚠️ Tidak ada binary di $VERSION, coba versi berikutnya..."
+      echo "⚠️ Tidak ada binary di $VERSION, skip..."
       continue
     fi
 
@@ -39,10 +36,6 @@ if [ ! -f "./junocashd" ]; then
 
     mkdir -p extracted
     tar -xzf junocash_release -C extracted
-
-    echo "=== ISI EXTRACT $VERSION ==="
-    find extracted -type f
-    echo "=========================="
 
     JUNOCASHD=$(find extracted -type f -name "junocashd" ! -name "*.dbg" | head -1)
     
@@ -55,17 +48,26 @@ if [ ! -f "./junocashd" ]; then
       [ -f "./junocash-cli" ] && chmod +x junocash-cli || true
       rm -rf junocash_release extracted
       echo "✅ Binary siap! Versi: $VERSION"
-      break
+      return 0
     else
-      echo "⚠️ Binary tidak ditemukan di $VERSION (hanya .dbg), coba versi berikutnya..."
+      echo "⚠️ Hanya .dbg di $VERSION, skip..."
       rm -rf junocash_release extracted
     fi
   done
 
-  if [ ! -f "./junocashd" ]; then
-    echo "❌ Gagal download binary dari semua versi!"
-    exit 1
-  fi
+  echo "❌ Gagal download binary dari semua versi!"
+  return 1
+}
+
+# Download hanya kalau belum ada
+if [ ! -f "./junocashd" ]; then
+  download_binary
+fi
+
+# Verifikasi binary ada
+if [ ! -f "./junocashd" ]; then
+  echo "❌ junocashd tidak ditemukan setelah download!"
+  exit 1
 fi
 
 RESTART_DELAY=${RESTART_DELAY:-10}
@@ -87,6 +89,6 @@ while true; do
 
   echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited"
   echo "⏳ Restart dalam ${RESTART_DELAY} detik..."
-  rm -f ./junocashd ./junocash-cli
   sleep $RESTART_DELAY
+  # ✅ TIDAK hapus binary — langsung restart
 done
