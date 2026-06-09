@@ -4,10 +4,25 @@ set -e
 mkdir -p /root/.junocash
 
 SHIELD_ADDRESS=${WALLET_ADDRESS:-"j1ym7fsw83rln2r4h2e24gs6q2hjc5mguxl2j7ukejtwrw4wh8sw5zhx5sfev3et7nuwx20pwmre54k66ahvqdfvlvzarwvt7luv4zkt5q"}
-
-# Set MINING_ADDRESS ke t-address dari wallet kamu (lihat app > Receive > Mining tab)
-# Ganti dengan salah satu dari: t1Jegz7mFagQSX2cRkkeTktgiisviZmCjta atau t1TnLCXTeweCQtgEPUbFDsU5D5E7qY8HcrK
 MINING_ADDRESS=${MINING_ADDRESS:-"t1Jegz7mFagQSX2cRkkeTktgiisviZmCjta"}
+
+# Tulis config file — cara paling reliable set mining address
+cat > /root/.junocash/junocashd.conf << CONF
+miningaddress=$MINING_ADDRESS
+mineraddress=$MINING_ADDRESS
+gen=1
+genproclimit=${MINER_THREADS:-1}
+onlynet=ipv4
+daemon=0
+printtoconsole=1
+addnode=junopool.com
+addnode=junohash.com
+addnode=juno.suprnova.cc
+addnode=juno-cash.minerlab.io
+CONF
+
+echo "📝 Config written:"
+cat /root/.junocash/junocashd.conf
 
 download_binary() {
   echo "📥 Mencari binary..."
@@ -68,10 +83,9 @@ download_binary() {
   return 1
 }
 
-# Auto shield loop — jalan di background
 auto_shield() {
   echo "🛡️ Auto-shield thread aktif, cek setiap 10 menit..."
-  sleep 300  # Tunggu node sync dulu (5 menit)
+  sleep 300
 
   while true; do
     BALANCE=$(./junocash-cli getbalance 2>/dev/null || echo "0")
@@ -87,7 +101,6 @@ auto_shield() {
   done
 }
 
-# Download binary kalau belum ada
 if [ ! -f "./junocashd" ]; then
   download_binary
 fi
@@ -109,25 +122,14 @@ while true; do
   ATTEMPT=$((ATTEMPT + 1))
   echo "🚀 [$(date '+%Y-%m-%d %H:%M:%S')] Start attempt #$ATTEMPT"
 
-  ./junocashd \
-    -gen=1 \
-    -genproclimit=${MINER_THREADS:-1} \
-    -daemon=0 \
-    -printtoconsole=1 \
-    -onlynet=ipv4 \
-    -miningaddress="$MINING_ADDRESS" \
-    -addnode=junopool.com \
-    -addnode=junohash.com \
-    -addnode=juno.suprnova.cc \
-    -addnode=juno-cash.minerlab.io &
+  # Config file sudah handle semua flags, cukup jalankan binary
+  ./junocashd &
 
   NODE_PID=$!
-
   auto_shield &
   SHIELD_PID=$!
 
   wait $NODE_PID || true
-
   kill $SHIELD_PID 2>/dev/null || true
 
   echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited"
