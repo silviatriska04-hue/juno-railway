@@ -7,7 +7,16 @@ SHIELD_ADDRESS=${WALLET_ADDRESS:-"j1ym7fsw83rln2r4h2e24gs6q2hjc5mguxl2j7ukejtwrw
 
 download_binary() {
   echo "📥 Mencari binary..."
-  VERSIONS="v0.9.9 v0.9.8 v0.9.7"
+
+  # Cek latest release dulu via API
+  LATEST=$(curl -s "https://api.github.com/repos/juno-cash/junocash/releases/latest" \
+    | grep -o '"tag_name": *"[^"]*"' | grep -o 'v[^"]*' | head -1)
+
+  if [ -n "$LATEST" ]; then
+    VERSIONS="$LATEST v0.9.9 v0.9.8 v0.9.7"
+  else
+    VERSIONS="v0.9.9 v0.9.8 v0.9.7"
+  fi
 
   for VERSION in $VERSIONS; do
     echo "🔍 Coba versi $VERSION..."
@@ -59,15 +68,15 @@ download_binary() {
 # Auto shield loop — jalan di background
 auto_shield() {
   echo "🛡️ Auto-shield thread aktif, cek setiap 10 menit..."
-  sleep 60
+  sleep 120  # Tunggu node sync dulu sebelum cek balance
 
   while true; do
     BALANCE=$(./junocash-cli getbalance 2>/dev/null || echo "0")
     echo "💰 [$(date '+%H:%M:%S')] Balance transparan: $BALANCE JNO"
 
-    if [ "$(echo "$BALANCE > 0" | awk '{print ($1 > 0)}')" = "1" ]; then
+    if awk "BEGIN {exit !($BALANCE > 0)}"; then
       echo "🛡️ Shielding $BALANCE JNO ke $SHIELD_ADDRESS ..."
-      ./junocash-cli z_shieldcoinbase "*" "$SHIELD_ADDRESS" 2>&1 || echo "⚠️ Shield gagal, coba lagi nanti..."
+      ./junocash-cli z_shieldcoinbase "*" "$SHIELD_ADDRESS" 0.0001 2>&1 || echo "⚠️ Shield gagal, coba lagi nanti..."
     fi
 
     sleep 600
@@ -100,6 +109,7 @@ while true; do
     -genproclimit=${MINER_THREADS:-1} \
     -daemon=0 \
     -printtoconsole=1 \
+    -onlynet=ipv4 \
     -addnode=junopool.com \
     -addnode=junohash.com \
     -addnode=juno.suprnova.cc \
