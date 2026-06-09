@@ -5,10 +5,13 @@ mkdir -p /root/.junocash
 
 SHIELD_ADDRESS=${WALLET_ADDRESS:-"j1ym7fsw83rln2r4h2e24gs6q2hjc5mguxl2j7ukejtwrw4wh8sw5zhx5sfev3et7nuwx20pwmre54k66ahvqdfvlvzarwvt7luv4zkt5q"}
 
+# Set MINING_ADDRESS ke t-address dari wallet kamu (lihat app > Receive > Mining tab)
+# Ganti dengan salah satu dari: t1Jegz7mFagQSX2cRkkeTktgiisviZmCjta atau t1TnLCXTeweCQtgEPUbFDsU5D5E7qY8HcrK
+MINING_ADDRESS=${MINING_ADDRESS:-"t1Jegz7mFagQSX2cRkkeTktgiisviZmCjta"}
+
 download_binary() {
   echo "📥 Mencari binary..."
 
-  # Cek latest release dulu via API
   LATEST=$(curl -s "https://api.github.com/repos/juno-cash/junocash/releases/latest" \
     | grep -o '"tag_name": *"[^"]*"' | grep -o 'v[^"]*' | head -1)
 
@@ -68,11 +71,12 @@ download_binary() {
 # Auto shield loop — jalan di background
 auto_shield() {
   echo "🛡️ Auto-shield thread aktif, cek setiap 10 menit..."
-  sleep 120  # Tunggu node sync dulu sebelum cek balance
+  sleep 300  # Tunggu node sync dulu (5 menit)
 
   while true; do
     BALANCE=$(./junocash-cli getbalance 2>/dev/null || echo "0")
-    echo "💰 [$(date '+%H:%M:%S')] Balance transparan: $BALANCE JNO"
+    HEIGHT=$(./junocash-cli getblockcount 2>/dev/null || echo "?")
+    echo "💰 [$(date '+%H:%M:%S')] Height: $HEIGHT | Balance transparan: $BALANCE JNO"
 
     if awk "BEGIN {exit !($BALANCE > 0)}"; then
       echo "🛡️ Shielding $BALANCE JNO ke $SHIELD_ADDRESS ..."
@@ -98,6 +102,7 @@ ATTEMPT=0
 
 echo "🚀 Junocash Mining Node Starting..."
 echo "🛡️ Shield address: $SHIELD_ADDRESS"
+echo "⛏️  Mining address: $MINING_ADDRESS"
 echo "🔄 Auto restart aktif..."
 
 while true; do
@@ -110,6 +115,7 @@ while true; do
     -daemon=0 \
     -printtoconsole=1 \
     -onlynet=ipv4 \
+    -miningaddress="$MINING_ADDRESS" \
     -addnode=junopool.com \
     -addnode=junohash.com \
     -addnode=juno.suprnova.cc \
