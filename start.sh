@@ -3,25 +3,20 @@ set -e
 
 mkdir -p /root/.junocash
 
-# === Cek WALLET_ADDRESS ===
 if [ -z "$WALLET_ADDRESS" ]; then
   echo "❌ ERROR: WALLET_ADDRESS env var belum di-set!"
   exit 1
 fi
 
-# === Download binary kalau belum ada ===
 if [ ! -f "./junocashd" ]; then
   echo "📥 Mengambil info release terbaru dari GitHub..."
 
-  # Ambil URL download dari GitHub API
   RELEASE_JSON=$(curl -s https://api.github.com/repos/juno-cash/junocash/releases/latest)
   
-  # Cari asset linux
   DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*linux[^"]*\.tar\.gz"' | grep -o 'https://[^"]*' | head -1)
 
   if [ -z "$DOWNLOAD_URL" ]; then
-    echo "❌ Gagal menemukan URL download Linux binary!"
-    echo "$RELEASE_JSON" | grep browser_download_url
+    echo "❌ Gagal menemukan URL download!"
     exit 1
   fi
 
@@ -30,10 +25,30 @@ if [ ! -f "./junocashd" ]; then
 
   echo "📦 Extracting..."
   tar -xzf junocash.tar.gz
-  cp junocash-*/bin/junocashd . 2>/dev/null || cp */junocashd . 2>/dev/null || true
-  cp junocash-*/bin/junocash-cli . 2>/dev/null || cp */junocash-cli . 2>/dev/null || true
-  chmod +x junocashd junocash-cli
-  rm -rf junocash.tar.gz junocash-*/
+
+  echo "🔍 Isi folder setelah extract:"
+  find . -name "junocashd" -o -name "junocash-cli" 2>/dev/null
+
+  # Cari binary di semua subfolder
+  JUNOCASHD=$(find . -name "junocashd" -type f | head -1)
+  JUNOCASHCLI=$(find . -name "junocash-cli" -type f | head -1)
+
+  if [ -z "$JUNOCASHD" ]; then
+    echo "❌ junocashd tidak ditemukan setelah extract!"
+    ls -la
+    exit 1
+  fi
+
+  cp "$JUNOCASHD" ./junocashd
+  [ -n "$JUNOCASHCLI" ] && cp "$JUNOCASHCLI" ./junocash-cli
+
+  chmod +x junocashd
+  [ -f "./junocash-cli" ] && chmod +x junocash-cli
+
+  rm -rf junocash.tar.gz
+  # Hapus folder extract
+  find . -maxdepth 1 -type d ! -name "." | grep -v "^\.$" | xargs rm -rf
+
   echo "✅ Binary siap!"
 fi
 
@@ -55,8 +70,11 @@ while true; do
     -daemon=0 \
     -printtoconsole=1 || true
 
-  EXIT_CODE=$?
-  echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited (code: $EXIT_CODE)"
+  echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited"
   echo "⏳ Restart dalam ${RESTART_DELAY} detik..."
+
+  # Hapus binary biar download ulang versi terbaru
+  rm -f ./junocashd ./junocash-cli
+
   sleep $RESTART_DELAY
 done
