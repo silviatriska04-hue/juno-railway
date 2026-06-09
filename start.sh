@@ -13,46 +13,58 @@ if [ ! -f "./junocashd" ]; then
 
   RELEASE_JSON=$(curl -s https://api.github.com/repos/juno-cash/junocash/releases/latest)
   
+  echo "=== SEMUA ASSET URL ==="
+  echo "$RELEASE_JSON" | grep browser_download_url
+  echo "======================"
+
   DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*linux[^"]*\.tar\.gz"' | grep -o 'https://[^"]*' | head -1)
 
   if [ -z "$DOWNLOAD_URL" ]; then
-    echo "❌ Gagal menemukan URL download!"
-    exit 1
+    echo "❌ Tidak ada .tar.gz linux, coba cari semua asset..."
+    DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*linux[^"]*"' | grep -o 'https://[^"]*' | head -1)
   fi
 
   echo "📥 Downloading dari: $DOWNLOAD_URL"
-  wget -q "$DOWNLOAD_URL" -O junocash.tar.gz
+  wget -q "$DOWNLOAD_URL" -O junocash_release
 
-  echo "📦 Extracting..."
-  tar -xzf junocash.tar.gz
+  echo "=== TIPE FILE ==="
+  file junocash_release
 
-  echo "🔍 Isi folder setelah extract:"
-  find . -name "junocashd" -o -name "junocash-cli" 2>/dev/null
+  # Cek apakah tar.gz atau file tunggal
+  if file junocash_release | grep -q "gzip\|tar"; then
+    echo "📦 Extracting tar.gz..."
+    mkdir -p extracted
+    tar -xzf junocash_release -C extracted
 
-  # Cari binary di semua subfolder
-  JUNOCASHD=$(find . -name "junocashd" -type f | head -1)
-  JUNOCASHCLI=$(find . -name "junocash-cli" -type f | head -1)
+    echo "=== ISI SETELAH EXTRACT ==="
+    find extracted -type f
+    echo "=========================="
+
+    JUNOCASHD=$(find extracted -name "junocashd" -type f | head -1)
+    JUNOCASHCLI=$(find extracted -name "junocash-cli" -type f | head -1)
+  else
+    echo "📄 File tunggal (bukan tar.gz), coba langsung pakai..."
+    cp junocash_release junocashd
+    chmod +x junocashd
+    JUNOCASHD="./junocashd"
+  fi
 
   if [ -z "$JUNOCASHD" ]; then
-    echo "❌ junocashd tidak ditemukan setelah extract!"
-    ls -la
+    echo "❌ junocashd tidak ditemukan!"
+    echo "=== SEMUA FILE DI EXTRACTED ==="
+    find extracted -type f -ls 2>/dev/null || ls -la
     exit 1
   fi
 
   cp "$JUNOCASHD" ./junocashd
-  [ -n "$JUNOCASHCLI" ] && cp "$JUNOCASHCLI" ./junocash-cli
-
+  [ -n "$JUNOCASHCLI" ] && cp "$JUNOCASHCLI" ./junocash-cli || true
   chmod +x junocashd
-  [ -f "./junocash-cli" ] && chmod +x junocash-cli
+  [ -f "./junocash-cli" ] && chmod +x junocash-cli || true
 
-  rm -rf junocash.tar.gz
-  # Hapus folder extract
-  find . -maxdepth 1 -type d ! -name "." | grep -v "^\.$" | xargs rm -rf
-
+  rm -rf junocash_release extracted
   echo "✅ Binary siap!"
 fi
 
-# === Auto Restart Loop ===
 RESTART_DELAY=${RESTART_DELAY:-10}
 ATTEMPT=0
 
@@ -72,9 +84,6 @@ while true; do
 
   echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited"
   echo "⏳ Restart dalam ${RESTART_DELAY} detik..."
-
-  # Hapus binary biar download ulang versi terbaru
   rm -f ./junocashd ./junocash-cli
-
   sleep $RESTART_DELAY
 done
