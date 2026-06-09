@@ -2,6 +2,7 @@ FROM ubuntu:22.04
 
 RUN apt-get update && apt-get install -y \
     wget curl ca-certificates tar jq file \
+    libnuma1 \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
