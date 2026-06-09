@@ -59,19 +59,18 @@ download_binary() {
 # Auto shield loop — jalan di background
 auto_shield() {
   echo "🛡️ Auto-shield thread aktif, cek setiap 10 menit..."
-  sleep 60 # tunggu node ready dulu
+  sleep 60
 
   while true; do
     BALANCE=$(./junocash-cli getbalance 2>/dev/null || echo "0")
     echo "💰 [$(date '+%H:%M:%S')] Balance transparan: $BALANCE JNO"
 
-    # Shield kalau balance > 0
     if [ "$(echo "$BALANCE > 0" | awk '{print ($1 > 0)}')" = "1" ]; then
       echo "🛡️ Shielding $BALANCE JNO ke $SHIELD_ADDRESS ..."
       ./junocash-cli z_shieldcoinbase "*" "$SHIELD_ADDRESS" 2>&1 || echo "⚠️ Shield gagal, coba lagi nanti..."
     fi
 
-    sleep 600 # cek tiap 10 menit
+    sleep 600
   done
 }
 
@@ -96,23 +95,23 @@ while true; do
   ATTEMPT=$((ATTEMPT + 1))
   echo "🚀 [$(date '+%Y-%m-%d %H:%M:%S')] Start attempt #$ATTEMPT"
 
-  # Jalankan node
   ./junocashd \
     -gen=1 \
     -genproclimit=${MINER_THREADS:-1} \
     -daemon=0 \
-    -printtoconsole=1 &
+    -printtoconsole=1 \
+    -addnode=junopool.com \
+    -addnode=junohash.com \
+    -addnode=juno.suprnova.cc \
+    -addnode=juno-cash.minerlab.io &
 
   NODE_PID=$!
 
-  # Jalankan auto-shield di background setelah node start
   auto_shield &
   SHIELD_PID=$!
 
-  # Tunggu node selesai
   wait $NODE_PID || true
 
-  # Matikan shield loop kalau node mati
   kill $SHIELD_PID 2>/dev/null || true
 
   echo "⚠️  [$(date '+%Y-%m-%d %H:%M:%S')] Process exited"
