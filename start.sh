@@ -17,42 +17,43 @@ if [ ! -f "./junocashd" ]; then
   echo "$RELEASE_JSON" | grep browser_download_url
   echo "======================"
 
-  DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*linux[^"]*\.tar\.gz"' | grep -o 'https://[^"]*' | head -1)
+  # Cari linux tar.gz yang BUKAN .dbg dan BUKAN SHA256
+  DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
+    | grep -o '"browser_download_url": *"[^"]*"' \
+    | grep -o 'https://[^"]*' \
+    | grep -i "linux" \
+    | grep "\.tar\.gz" \
+    | grep -v "\.dbg" \
+    | grep -v "SHA256" \
+    | head -1)
 
   if [ -z "$DOWNLOAD_URL" ]; then
-    echo "❌ Tidak ada .tar.gz linux, coba cari semua asset..."
-    DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep -o '"browser_download_url": *"[^"]*linux[^"]*"' | grep -o 'https://[^"]*' | head -1)
+    echo "⚠️ Tidak ada linux tar.gz, coba cari semua non-dbg asset..."
+    DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
+      | grep -o '"browser_download_url": *"[^"]*"' \
+      | grep -o 'https://[^"]*' \
+      | grep -i "linux" \
+      | grep -v "\.dbg" \
+      | grep -v "SHA256" \
+      | head -1)
   fi
 
   echo "📥 Downloading dari: $DOWNLOAD_URL"
   wget -q "$DOWNLOAD_URL" -O junocash_release
 
-  echo "=== TIPE FILE ==="
-  file junocash_release
+  echo "📦 Extracting..."
+  mkdir -p extracted
+  tar -xzf junocash_release -C extracted
 
-  # Cek apakah tar.gz atau file tunggal
-  if file junocash_release | grep -q "gzip\|tar"; then
-    echo "📦 Extracting tar.gz..."
-    mkdir -p extracted
-    tar -xzf junocash_release -C extracted
+  echo "=== ISI SETELAH EXTRACT ==="
+  find extracted -type f
+  echo "=========================="
 
-    echo "=== ISI SETELAH EXTRACT ==="
-    find extracted -type f
-    echo "=========================="
-
-    JUNOCASHD=$(find extracted -name "junocashd" -type f | head -1)
-    JUNOCASHCLI=$(find extracted -name "junocash-cli" -type f | head -1)
-  else
-    echo "📄 File tunggal (bukan tar.gz), coba langsung pakai..."
-    cp junocash_release junocashd
-    chmod +x junocashd
-    JUNOCASHD="./junocashd"
-  fi
+  JUNOCASHD=$(find extracted -type f -name "junocashd" ! -name "*.dbg" | head -1)
+  JUNOCASHCLI=$(find extracted -type f -name "junocash-cli" ! -name "*.dbg" | head -1)
 
   if [ -z "$JUNOCASHD" ]; then
     echo "❌ junocashd tidak ditemukan!"
-    echo "=== SEMUA FILE DI EXTRACTED ==="
-    find extracted -type f -ls 2>/dev/null || ls -la
     exit 1
   fi
 
