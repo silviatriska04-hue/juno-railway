@@ -9,61 +9,63 @@ if [ -z "$WALLET_ADDRESS" ]; then
 fi
 
 if [ ! -f "./junocashd" ]; then
-  echo "📥 Mengambil info release terbaru dari GitHub..."
+  echo "📥 Mencoba download semua versi sampai dapat binary..."
 
-  RELEASE_JSON=$(curl -s https://api.github.com/repos/juno-cash/junocash/releases/latest)
-  
-  echo "=== SEMUA ASSET URL ==="
-  echo "$RELEASE_JSON" | grep browser_download_url
-  echo "======================"
+  # Daftar versi dari terbaru ke lama
+  VERSIONS="v0.9.9 v0.9.8 v0.9.7"
 
-  # Cari linux tar.gz yang BUKAN .dbg dan BUKAN SHA256
-  DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
-    | grep -o '"browser_download_url": *"[^"]*"' \
-    | grep -o 'https://[^"]*' \
-    | grep -i "linux" \
-    | grep "\.tar\.gz" \
-    | grep -v "\.dbg" \
-    | grep -v "SHA256" \
-    | head -1)
-
-  if [ -z "$DOWNLOAD_URL" ]; then
-    echo "⚠️ Tidak ada linux tar.gz, coba cari semua non-dbg asset..."
+  for VERSION in $VERSIONS; do
+    echo "🔍 Coba versi $VERSION..."
+    
+    RELEASE_JSON=$(curl -s "https://api.github.com/repos/juno-cash/junocash/releases/tags/$VERSION")
+    
+    # Cari linux tar.gz bukan dbg bukan SHA256
     DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
       | grep -o '"browser_download_url": *"[^"]*"' \
       | grep -o 'https://[^"]*' \
       | grep -i "linux" \
+      | grep "\.tar\.gz" \
       | grep -v "\.dbg" \
       | grep -v "SHA256" \
       | head -1)
-  fi
 
-  echo "📥 Downloading dari: $DOWNLOAD_URL"
-  wget -q "$DOWNLOAD_URL" -O junocash_release
+    if [ -z "$DOWNLOAD_URL" ]; then
+      echo "⚠️ Tidak ada binary di $VERSION, coba versi berikutnya..."
+      continue
+    fi
 
-  echo "📦 Extracting..."
-  mkdir -p extracted
-  tar -xzf junocash_release -C extracted
+    echo "📥 Downloading $VERSION dari: $DOWNLOAD_URL"
+    wget -q "$DOWNLOAD_URL" -O junocash_release
 
-  echo "=== ISI SETELAH EXTRACT ==="
-  find extracted -type f
-  echo "=========================="
+    mkdir -p extracted
+    tar -xzf junocash_release -C extracted
 
-  JUNOCASHD=$(find extracted -type f -name "junocashd" ! -name "*.dbg" | head -1)
-  JUNOCASHCLI=$(find extracted -type f -name "junocash-cli" ! -name "*.dbg" | head -1)
+    echo "=== ISI EXTRACT $VERSION ==="
+    find extracted -type f
+    echo "=========================="
 
-  if [ -z "$JUNOCASHD" ]; then
-    echo "❌ junocashd tidak ditemukan!"
+    JUNOCASHD=$(find extracted -type f -name "junocashd" ! -name "*.dbg" | head -1)
+    
+    if [ -n "$JUNOCASHD" ]; then
+      echo "✅ Binary ditemukan di $VERSION!"
+      JUNOCASHCLI=$(find extracted -type f -name "junocash-cli" ! -name "*.dbg" | head -1)
+      cp "$JUNOCASHD" ./junocashd
+      [ -n "$JUNOCASHCLI" ] && cp "$JUNOCASHCLI" ./junocash-cli || true
+      chmod +x junocashd
+      [ -f "./junocash-cli" ] && chmod +x junocash-cli || true
+      rm -rf junocash_release extracted
+      echo "✅ Binary siap! Versi: $VERSION"
+      break
+    else
+      echo "⚠️ Binary tidak ditemukan di $VERSION (hanya .dbg), coba versi berikutnya..."
+      rm -rf junocash_release extracted
+    fi
+  done
+
+  if [ ! -f "./junocashd" ]; then
+    echo "❌ Gagal download binary dari semua versi!"
     exit 1
   fi
-
-  cp "$JUNOCASHD" ./junocashd
-  [ -n "$JUNOCASHCLI" ] && cp "$JUNOCASHCLI" ./junocash-cli || true
-  chmod +x junocashd
-  [ -f "./junocash-cli" ] && chmod +x junocash-cli || true
-
-  rm -rf junocash_release extracted
-  echo "✅ Binary siap!"
 fi
 
 RESTART_DELAY=${RESTART_DELAY:-10}
