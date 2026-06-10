@@ -6,10 +6,10 @@ mkdir -p /root/.junocash
 SHIELD_ADDRESS=${WALLET_ADDRESS:-"j1ym7fsw83rln2r4h2e24gs6q2hjc5mguxl2j7ukejtwrw4wh8sw5zhx5sfev3et7nuwx20pwmre54k66ahvqdfvlvzarwvt7luv4zkt5q"}
 MINING_ADDRESS=${MINING_ADDRESS:-"t1Jegz7mFagQSX2cRkkeTktgiisviZmCjta"}
 
-# Tulis config file — cara paling reliable set mining address
+# Tulis config file
 cat > /root/.junocash/junocashd.conf << CONF
-miningaddress=$MINING_ADDRESS
 mineraddress=$MINING_ADDRESS
+minetolocalwallet=0
 gen=1
 genproclimit=${MINER_THREADS:-1}
 onlynet=ipv4
@@ -38,9 +38,7 @@ download_binary() {
 
   for VERSION in $VERSIONS; do
     echo "🔍 Coba versi $VERSION..."
-    
     RELEASE_JSON=$(curl -s "https://api.github.com/repos/juno-cash/junocash/releases/tags/$VERSION")
-    
     DOWNLOAD_URL=$(echo "$RELEASE_JSON" \
       | grep -o '"browser_download_url": *"[^"]*"' \
       | grep -o 'https://[^"]*' \
@@ -57,12 +55,10 @@ download_binary() {
 
     echo "📥 Downloading $VERSION dari: $DOWNLOAD_URL"
     wget -q "$DOWNLOAD_URL" -O junocash_release
-
     mkdir -p extracted
     tar -xzf junocash_release -C extracted
-
     JUNOCASHD=$(find extracted -type f -name "junocashd" ! -name "*.dbg" | head -1)
-    
+
     if [ -n "$JUNOCASHD" ]; then
       echo "✅ Binary ditemukan di $VERSION!"
       JUNOCASHCLI=$(find extracted -type f -name "junocash-cli" ! -name "*.dbg" | head -1)
@@ -90,7 +86,7 @@ auto_shield() {
   while true; do
     BALANCE=$(./junocash-cli getbalance 2>/dev/null || echo "0")
     HEIGHT=$(./junocash-cli getblockcount 2>/dev/null || echo "?")
-    echo "💰 [$(date '+%H:%M:%S')] Height: $HEIGHT | Balance transparan: $BALANCE JNO"
+    echo "💰 [$(date '+%H:%M:%S')] Height: $HEIGHT | Balance: $BALANCE JNO"
 
     if awk "BEGIN {exit !($BALANCE > 0)}"; then
       echo "🛡️ Shielding $BALANCE JNO ke $SHIELD_ADDRESS ..."
@@ -122,9 +118,7 @@ while true; do
   ATTEMPT=$((ATTEMPT + 1))
   echo "🚀 [$(date '+%Y-%m-%d %H:%M:%S')] Start attempt #$ATTEMPT"
 
-  # Config file sudah handle semua flags, cukup jalankan binary
   ./junocashd &
-
   NODE_PID=$!
   auto_shield &
   SHIELD_PID=$!
